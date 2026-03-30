@@ -50,9 +50,6 @@
                     <button id="saveSettings" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm">保存 (Save)</button>
                     <button id="closeSettings" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm">关闭 (Close)</button>
                 </div>
-                <p class="mt-4 text-[10px] text-slate-400 text-center">
-                    未设置 Key 時無法使用文字起こし機能。
-                </p>
             </div>
         </div>
 
@@ -96,7 +93,7 @@
                     </button>
                 </div>
 
-                <!-- Actions (Visible after recording) -->
+                <!-- Actions -->
                 <div id="actionsContainer" class="space-y-4 hidden border-t border-slate-100 pt-6">
                     <div class="flex items-center space-x-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                         <button id="playBtn" class="text-indigo-600 hover:text-indigo-800 transition-colors">
@@ -130,7 +127,8 @@
 
     <script>
         const SPEECH_LIMIT = 60; 
-        const MODEL_ID = "gemini-2.5-flash-preview-09-2025";
+        // 修正: 確実に存在するモデル名に変更
+        const MODEL_ID = "gemini-1.5-flash";
 
         let mediaRecorder;
         let audioChunks = [];
@@ -140,7 +138,6 @@
         let timeLeft = SPEECH_LIMIT;
         let currentMimeType = '';
 
-        // UI
         const recordBtn = document.getElementById('recordBtn');
         const stopBtn = document.getElementById('stopBtn');
         const playBtn = document.getElementById('playBtn');
@@ -157,7 +154,6 @@
         const settingsModal = document.getElementById('settingsModal');
         const apiKeyInput = document.getElementById('apiKeyInput');
 
-        // Initial setup
         let savedApiKey = localStorage.getItem('GEMINI_API_KEY') || '';
         apiKeyInput.value = savedApiKey;
 
@@ -170,8 +166,7 @@
         }
 
         async function startSpeech() {
-            // Verify Key first
-            if (!savedApiKey || savedApiKey.trim() === "") {
+            if (!savedApiKey) {
                 showError("请先在设置中配置 Gemini API Key。");
                 settingsModal.classList.remove('hidden');
                 return;
@@ -184,8 +179,6 @@
             
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // MimeType optimization for iOS
                 const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/wav'];
                 currentMimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || 'audio/mp4';
 
@@ -199,7 +192,7 @@
                     audioBlob = new Blob(audioChunks, { type: currentMimeType });
                     const audioURL = URL.createObjectURL(audioBlob);
                     audioPlayer.src = audioURL;
-                    audioPlayer.load(); // Prepare for iOS playback
+                    audioPlayer.load();
                     
                     actionsContainer.classList.remove('hidden');
                     statusLabel.textContent = "演讲结束 (Done)";
@@ -224,7 +217,7 @@
                 }, 1000);
                 
             } catch (err) {
-                showError("无法启动麦克风。请确保已授予权限。");
+                showError("无法启动麦克风。请確保権限。");
             }
         }
 
@@ -252,8 +245,6 @@
             reader.readAsDataURL(audioBlob);
             reader.onloadend = async () => {
                 const base64 = reader.result.split(',')[1];
-                
-                // Gemini API compatible MimeType
                 let apiMimeType = audioBlob.type.split(';')[0];
                 if (apiMimeType.includes('mp4') || apiMimeType.includes('m4a')) {
                     apiMimeType = 'audio/mp4';
@@ -262,14 +253,14 @@
                 const payload = {
                     contents: [{
                         parts: [
-                            { text: "请将这段中文演讲准确转换为文字。如果是空音请提示。只需要返回文字内容。" },
+                            { text: "请将这段中文演讲准确转换为文字。只需要返回文字内容。" },
                             { inlineData: { mimeType: apiMimeType, data: base64 } }
                         ]
                     }]
                 };
 
                 try {
-                    // API Call with URL Key (most reliable for PWA)
+                    // APIエンドポイントをv1beta/models/{MODEL_ID}:generateContent に統合
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent?key=${savedApiKey}`;
                     
                     const response = await fetch(url, {
@@ -281,9 +272,6 @@
                     const data = await response.json();
                     
                     if (!response.ok) {
-                        if (data.error?.message?.includes("API key not valid")) {
-                            throw new Error("API Key 无效。请检查设置。");
-                        }
                         throw new Error(data.error?.message || "通信错误");
                     }
 
@@ -297,7 +285,6 @@
                     }
                 } catch (e) {
                     showError("文字转换失败: " + e.message);
-                    console.error(e);
                 } finally {
                     loadingSpinner.classList.add('hidden');
                     transcribeBtn.disabled = false;
@@ -308,11 +295,9 @@
         function showError(msg) {
             errorArea.textContent = msg;
             errorArea.classList.remove('hidden');
-            // Scroll to error on small screens
             errorArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        // Settings
         document.getElementById('openSettings').onclick = () => settingsModal.classList.remove('hidden');
         document.getElementById('closeSettings').onclick = () => settingsModal.classList.add('hidden');
         document.getElementById('saveSettings').onclick = () => {
@@ -324,7 +309,6 @@
             }
         };
 
-        // Button events
         recordBtn.onclick = startSpeech;
         stopBtn.onclick = stopSpeech;
         
@@ -353,20 +337,15 @@
 
         document.getElementById('copyBtn').onclick = () => {
             const text = transcriptionText.textContent;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(text).then(() => alert("已复制到剪贴板"));
-            } else {
-                const ta = document.createElement("textarea");
-                ta.value = text;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                document.body.removeChild(ta);
-                alert("已复制");
-            }
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert("已复制");
         };
 
-        // Unlock Audio Context for iOS Safari
         window.addEventListener('touchstart', () => {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             if (ctx.state === 'suspended') ctx.resume();
