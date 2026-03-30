@@ -20,27 +20,31 @@
         }
         * { -webkit-tap-highlight-color: transparent; }
         body {
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            touch-action: none;
+            /* 固定を解除し、スクロール可能な設定に変更 */
+            margin: 0;
+            padding: 0;
             background-color: #f8fafc;
+            min-height: 100vh;
         }
         .scroll-container {
-            height: 100vh;
-            overflow-y: auto;
+            width: 100%;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            /* 下部の余白をiPhoneのセーフエリアに合わせる */
+            padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+            overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: env(safe-area-inset-bottom);
         }
     </style>
 </head>
 <body class="bg-slate-50 font-sans text-slate-900">
-    <div class="scroll-container flex flex-col items-center p-4">
+    <div class="scroll-container p-4">
         <!-- Settings Overlay -->
-        <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6 hidden">
+        <div id="settingsModal" class="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-6 hidden">
             <div class="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
-                <h2 class="text-xl font-bold mb-2">API 设置 (Settings)</h2>
+                <h2 class="text-xl font-bold mb-2 text-slate-800">API 设置 (Settings)</h2>
                 <p class="text-xs text-slate-500 mb-4">请输入 Gemini API Key。</p>
                 <input type="password" id="apiKeyInput" placeholder="AIza..." class="w-full p-3 border border-slate-200 rounded-xl mb-4 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
                 <div class="flex space-x-2">
@@ -50,7 +54,7 @@
             </div>
         </div>
 
-        <div class="w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden mt-4 mb-8 flex flex-col border border-slate-100 relative">
+        <div class="w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden mt-4 mb-4 flex flex-col border border-slate-100 relative">
             <button id="openSettings" class="absolute top-6 right-6 text-white/70 hover:text-white z-10 p-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -103,11 +107,12 @@
                     </button>
                 </div>
 
-                <div id="resultContainer" class="hidden space-y-2 pb-4">
+                <div id="resultContainer" class="hidden space-y-2 pb-2">
                     <div class="flex justify-between items-center px-1">
                         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">识别结果</span>
                     </div>
-                    <div id="transcriptionText" class="w-full p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-slate-800 text-lg leading-relaxed shadow-inner italic whitespace-pre-wrap min-h-[100px]"></div>
+                    <!-- 文字起こし結果のエリア自体にスクロールを設定し、最大高さを設ける -->
+                    <div id="transcriptionText" class="w-full p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-slate-800 text-lg leading-relaxed shadow-inner italic whitespace-pre-wrap min-h-[120px] max-h-[300px] overflow-y-auto overflow-x-hidden"></div>
                 </div>
                 
                 <div id="errorArea" class="hidden text-xs text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 font-medium"></div>
@@ -117,8 +122,6 @@
 
     <script>
         const SPEECH_LIMIT = 60; 
-        
-        // 修正: リストにあった最新のモデル名に変更
         const MODEL_NAME = "gemini-2.5-flash";
 
         let mediaRecorder;
@@ -192,7 +195,7 @@
                     updateTimerUI(timeLeft);
                     if (timeLeft <= 0) stopSpeech();
                 }, 1000);
-            } catch (err) { showError("麦克风启动失败。"); }
+            } catch (err) { showError("麦克風启动失败。"); }
         }
 
         function stopSpeech() {
@@ -225,7 +228,6 @@
                 };
 
                 try {
-                    // エンドポイントをリストにあった v1 で指定
                     const url = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${savedApiKey}`;
                     
                     const response = await fetch(url, {
@@ -243,8 +245,14 @@
                     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
                     transcriptionText.textContent = text || "未识别到内容。";
                     resultContainer.classList.remove('hidden');
+                    
+                    // 文字起こし完了後、自動的に結果エリアまでスクロール
+                    setTimeout(() => {
+                        resultContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+
                 } catch (e) {
-                    showError("转换失败: " + e.message + "\n请确认 API Key 是否属于提供リストのモデルが使えるプロジェクトのものか確認してください。");
+                    showError("转换失败: " + e.message);
                 } finally {
                     loadingSpinner.classList.add('hidden');
                     transcribeBtn.disabled = false;
