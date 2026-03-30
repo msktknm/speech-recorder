@@ -11,27 +11,17 @@
     <meta name="apple-mobile-web-app-title" content="1MinSpeech">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5968/5968204.png">
     
-    <!-- Standard PWA Manifest (Data URL) -->
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIjEtTWludXRlIENoaW5lc2UgU3BlZWNoIFRyYWluZXIiLAogICJzaG9ydF9uYW1lIjogIjFNaW5TcGVlY2giLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzRmNDZlNSIsCiAgInRoZW1lX2NvbG9yIjogIiM0ZjQ2ZTUiLAogICpvaWNvbnMiOiBbewogICAgInNyYyI6ICJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi8vNTk2OC81OTY4MjA0LnBuZyIsCiAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAidHlwZSI6ICJpbWZ3ZS9wbmciCiAgfV0KfQ==">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIjEtTWludXRlIENoaW5lc2UgU3BlZWNoIFRyYWluZXIiLAogICJzaG9ydF9uYW1lIjogIjFNaW5TcGVlY2giLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzRmNDZlNSIsCiAgInRoZW1lX2NvbG9yIjogIiM0ZjQ2ZTUiLAogICJpY29ucyI6IFt7CiAgICAic3JjIjogImh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzU5NjgvNTk2ODIwNC5wbmciLAogICAgInNpemVzIjogIjUxMng1MTIiLAogICAgInR5cGUiOiAiaW1hZ2UvcG5nIgogIH1dCn0=">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .recording-pulse {
-            animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.05); opacity: 0.8; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        * { -webkit-tap-highlight-color: transparent; }
-        
         .timer-circle {
             transition: stroke-dashoffset 1s linear;
             transform: rotate(-90deg);
             transform-origin: 50% 50%;
         }
-
+        * { -webkit-tap-highlight-color: transparent; }
         body {
             position: fixed;
             width: 100%;
@@ -50,7 +40,31 @@
 </head>
 <body class="bg-slate-50 font-sans text-slate-900">
     <div class="scroll-container flex flex-col items-center p-4">
-        <div class="w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden mt-4 mb-8 flex flex-col border border-slate-100">
+        <!-- Settings Overlay -->
+        <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6 hidden">
+            <div class="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl">
+                <h2 class="text-xl font-bold mb-2">API 设置 (Settings)</h2>
+                <p class="text-xs text-slate-500 mb-4">请输入 Gemini API Key。它将仅保存在您的浏览器中。</p>
+                <input type="password" id="apiKeyInput" placeholder="AIza..." class="w-full p-3 border border-slate-200 rounded-xl mb-4 focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+                <div class="flex space-x-2">
+                    <button id="saveSettings" class="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold text-sm">保存 (Save)</button>
+                    <button id="closeSettings" class="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm">关闭 (Close)</button>
+                </div>
+                <p class="mt-4 text-[10px] text-slate-400 text-center">
+                    未设置 Key 時無法使用文字起こし機能。
+                </p>
+            </div>
+        </div>
+
+        <div class="w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden mt-4 mb-8 flex flex-col border border-slate-100 relative">
+            <!-- Settings Button -->
+            <button id="openSettings" class="absolute top-6 right-6 text-white/70 hover:text-white z-10 p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </button>
+
             <!-- Header -->
             <div class="bg-indigo-600 p-6 pt-10 text-white text-center">
                 <h1 class="text-xl font-bold tracking-tight">一分钟演讲训练</h1>
@@ -58,7 +72,7 @@
             </div>
 
             <div class="p-8 space-y-6">
-                <!-- Timer & Visualizer -->
+                <!-- Timer Ring -->
                 <div class="relative flex flex-col items-center justify-center py-4">
                     <svg class="w-48 h-48">
                         <circle class="text-slate-100" stroke-width="8" stroke="currentColor" fill="transparent" r="85" cx="96" cy="96" />
@@ -70,9 +84,9 @@
                     </div>
                 </div>
 
-                <!-- Speech Controls -->
+                <!-- Controls -->
                 <div class="flex justify-center items-center h-24">
-                    <button id="recordBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white w-20 h-20 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 group">
+                    <button id="recordBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white w-20 h-20 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                         </svg>
@@ -82,7 +96,7 @@
                     </button>
                 </div>
 
-                <!-- Playback & Transcribe Actions -->
+                <!-- Actions (Visible after recording) -->
                 <div id="actionsContainer" class="space-y-4 hidden border-t border-slate-100 pt-6">
                     <div class="flex items-center space-x-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                         <button id="playBtn" class="text-indigo-600 hover:text-indigo-800 transition-colors">
@@ -94,31 +108,29 @@
                             <div id="progressBar" class="h-full bg-indigo-500 w-0 transition-all duration-100"></div>
                         </div>
                     </div>
-
                     <button id="transcribeBtn" class="w-full bg-slate-800 hover:bg-black text-white font-bold py-4 px-6 rounded-2xl shadow-lg flex items-center justify-center space-x-3 transition-all active:translate-y-1">
-                        <span>生成演讲稿 (Transcribe Speech)</span>
+                        <span>生成演讲稿 (Transcribe)</span>
                         <div id="loadingSpinner" class="hidden animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
                     </button>
                 </div>
 
-                <!-- Result Area -->
+                <!-- Result -->
                 <div id="resultContainer" class="hidden space-y-2 pb-4">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">识别结果 (Transcription)</span>
-                        <button id="copyBtn" class="text-indigo-600 text-xs font-semibold">点击复制</button>
+                    <div class="flex justify-between items-center px-1">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">识别结果 (Transcription)</span>
+                        <button id="copyBtn" class="text-indigo-600 text-xs font-semibold">复制 (Copy)</button>
                     </div>
-                    <div id="transcriptionText" class="w-full p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-slate-800 text-lg leading-relaxed shadow-inner italic"></div>
+                    <div id="transcriptionText" class="w-full p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-slate-800 text-lg leading-relaxed shadow-inner italic whitespace-pre-wrap min-h-[100px]"></div>
                 </div>
                 
-                <div id="errorArea" class="hidden text-[10px] text-red-500 bg-red-50 p-3 rounded-lg border border-red-100"></div>
+                <div id="errorArea" class="hidden text-xs text-red-500 bg-red-50 p-4 rounded-xl border border-red-100 font-medium"></div>
             </div>
         </div>
     </div>
 
     <script>
-        const apiKey = ""; 
-        const modelId = "gemini-2.5-flash-preview-09-2025";
         const SPEECH_LIMIT = 60; 
+        const MODEL_ID = "gemini-2.5-flash-preview-09-2025";
 
         let mediaRecorder;
         let audioChunks = [];
@@ -128,6 +140,7 @@
         let timeLeft = SPEECH_LIMIT;
         let currentMimeType = '';
 
+        // UI
         const recordBtn = document.getElementById('recordBtn');
         const stopBtn = document.getElementById('stopBtn');
         const playBtn = document.getElementById('playBtn');
@@ -141,18 +154,29 @@
         const progressBar = document.getElementById('progressBar');
         const loadingSpinner = document.getElementById('loadingSpinner');
         const errorArea = document.getElementById('errorArea');
+        const settingsModal = document.getElementById('settingsModal');
+        const apiKeyInput = document.getElementById('apiKeyInput');
 
-        const totalCircumference = 534;
+        // Initial setup
+        let savedApiKey = localStorage.getItem('GEMINI_API_KEY') || '';
+        apiKeyInput.value = savedApiKey;
 
         function updateTimerUI(seconds) {
             const m = String(Math.floor(seconds / 60)).padStart(2, '0');
             const s = String(seconds % 60).padStart(2, '0');
             timerDisplay.textContent = `${m}:${s}`;
-            const offset = totalCircumference - (seconds / SPEECH_LIMIT) * totalCircumference;
+            const offset = 534 - (seconds / SPEECH_LIMIT) * 534;
             timerRing.style.strokeDashoffset = offset;
         }
 
         async function startSpeech() {
+            // Verify Key first
+            if (!savedApiKey || savedApiKey.trim() === "") {
+                showError("请先在设置中配置 Gemini API Key。");
+                settingsModal.classList.remove('hidden');
+                return;
+            }
+
             errorArea.classList.add('hidden');
             resultContainer.classList.add('hidden');
             actionsContainer.classList.add('hidden');
@@ -161,9 +185,9 @@
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
-                // Better MimeType support detection for iOS
-                const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/wav'];
-                currentMimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+                // MimeType optimization for iOS
+                const types = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/wav'];
+                currentMimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || 'audio/mp4';
 
                 mediaRecorder = new MediaRecorder(stream, { mimeType: currentMimeType });
 
@@ -172,12 +196,11 @@
                 };
 
                 mediaRecorder.onstop = () => {
-                    // Create Blob only after recording truly stops
-                    audioBlob = new Blob(audioChunks, { type: currentMimeType || 'audio/mp4' });
+                    audioBlob = new Blob(audioChunks, { type: currentMimeType });
                     const audioURL = URL.createObjectURL(audioBlob);
                     audioPlayer.src = audioURL;
+                    audioPlayer.load(); // Prepare for iOS playback
                     
-                    // UI Reset
                     actionsContainer.classList.remove('hidden');
                     statusLabel.textContent = "演讲结束 (Done)";
                     recordBtn.classList.remove('hidden');
@@ -186,10 +209,9 @@
                 };
 
                 mediaRecorder.start();
-                
                 recordBtn.classList.add('hidden');
                 stopBtn.classList.remove('hidden');
-                statusLabel.textContent = "正在录音... (Speaking)";
+                statusLabel.textContent = "正在录音... (Recording)";
                 statusLabel.classList.add('text-indigo-600');
 
                 timeLeft = SPEECH_LIMIT;
@@ -202,8 +224,7 @@
                 }, 1000);
                 
             } catch (err) {
-                errorArea.textContent = "無法起動麦克風。請確認権限。 Error: " + err.message;
-                errorArea.classList.remove('hidden');
+                showError("无法启动麦克风。请确保已授予权限。");
             }
         }
 
@@ -216,9 +237,10 @@
         }
 
         async function transcribe() {
-            if (!audioBlob || audioBlob.size === 0) {
-                errorArea.textContent = "無効な録音データです。";
-                errorArea.classList.remove('hidden');
+            if (!audioBlob) return;
+            if (!savedApiKey) {
+                showError("API Key 未设置。");
+                settingsModal.classList.remove('hidden');
                 return;
             }
 
@@ -231,12 +253,10 @@
             reader.onloadend = async () => {
                 const base64 = reader.result.split(',')[1];
                 
-                // Normalize mimeType for Gemini API
+                // Gemini API compatible MimeType
                 let apiMimeType = audioBlob.type.split(';')[0];
-                if (apiMimeType === 'audio/x-m4a' || apiMimeType === 'audio/mp4') {
+                if (apiMimeType.includes('mp4') || apiMimeType.includes('m4a')) {
                     apiMimeType = 'audio/mp4';
-                } else if (!apiMimeType.includes('audio/')) {
-                    apiMimeType = 'audio/mp4'; // Fallback
                 }
 
                 const payload = {
@@ -249,31 +269,35 @@
                 };
 
                 try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+                    // API Call with URL Key (most reliable for PWA)
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent?key=${savedApiKey}`;
+                    
                     const response = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
 
+                    const data = await response.json();
+                    
                     if (!response.ok) {
-                        const errData = await response.json();
-                        throw new Error(errData.error?.message || "API通信失敗");
+                        if (data.error?.message?.includes("API key not valid")) {
+                            throw new Error("API Key 无效。请检查设置。");
+                        }
+                        throw new Error(data.error?.message || "通信错误");
                     }
 
-                    const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                    
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (text) {
                         transcriptionText.textContent = text;
                         resultContainer.classList.remove('hidden');
                     } else {
-                        transcriptionText.textContent = "未検出到有効語音。";
+                        transcriptionText.textContent = "未识别到语音内容。";
                         resultContainer.classList.remove('hidden');
                     }
                 } catch (e) {
-                    errorArea.textContent = "文字変換失敗: " + e.message;
-                    errorArea.classList.remove('hidden');
+                    showError("文字转换失败: " + e.message);
+                    console.error(e);
                 } finally {
                     loadingSpinner.classList.add('hidden');
                     transcribeBtn.disabled = false;
@@ -281,15 +305,32 @@
             };
         }
 
+        function showError(msg) {
+            errorArea.textContent = msg;
+            errorArea.classList.remove('hidden');
+            // Scroll to error on small screens
+            errorArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Settings
+        document.getElementById('openSettings').onclick = () => settingsModal.classList.remove('hidden');
+        document.getElementById('closeSettings').onclick = () => settingsModal.classList.add('hidden');
+        document.getElementById('saveSettings').onclick = () => {
+            savedApiKey = apiKeyInput.value.trim();
+            if (savedApiKey) {
+                localStorage.setItem('GEMINI_API_KEY', savedApiKey);
+                settingsModal.classList.add('hidden');
+                errorArea.classList.add('hidden');
+            }
+        };
+
+        // Button events
         recordBtn.onclick = startSpeech;
         stopBtn.onclick = stopSpeech;
         
         playBtn.onclick = () => {
             if (audioPlayer.paused) {
-                audioPlayer.play().catch(e => {
-                    errorArea.textContent = "再生エラー: " + e.message;
-                    errorArea.classList.remove('hidden');
-                });
+                audioPlayer.play().catch(e => showError("播放失败: " + e.message));
                 document.getElementById('playIcon').innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
             } else {
                 audioPlayer.pause();
@@ -312,28 +353,25 @@
 
         document.getElementById('copyBtn').onclick = () => {
             const text = transcriptionText.textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                alert("已複製文本");
-            }).catch(() => {
-                const el = document.createElement('textarea');
-                el.value = text;
-                document.body.appendChild(el);
-                el.select();
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => alert("已复制到剪贴板"));
+            } else {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
                 document.execCommand('copy');
-                document.body.removeChild(el);
-                alert("已複製文本");
-            });
+                document.body.removeChild(ta);
+                alert("已复制");
+            }
         };
 
-        // iOS Audio context unlock
+        // Unlock Audio Context for iOS Safari
         window.addEventListener('touchstart', () => {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             if (ctx.state === 'suspended') ctx.resume();
-            audioPlayer.play().then(() => {
-                audioPlayer.pause();
-                audioPlayer.currentTime = 0;
-            }).catch(() => {});
         }, { once: true });
+
     </script>
 </body>
 </html>
