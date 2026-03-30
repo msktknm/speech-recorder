@@ -11,8 +11,8 @@
     <meta name="apple-mobile-web-app-title" content="1MinSpeech">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/5968/5968204.png">
     
-    <!-- Standard PWA Manifest (Data URL to avoid external file issues in preview) -->
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIjEtTWludXRlIENoaW5lc2UgU3BlZWNoIFRyYWluZXIiLAogICJzaG9ydF9uYW1lIjogIjFNaW5TcGVlY2giLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzRmNDZlNSIsCiAgInRoZW1lX2NvbG9yIjogIiM0ZjQ2ZTUiLAogICJpY29ucyI6IFt7CiAgICAic3JjIjogImh0dHBzOi8vY2RuLWljb25zLXBuZy5mbGF0aWNvbi5jb20vNTEyLzU5NjgvNTk2ODIwNC5wbmciLAogICAgInNpemVzIjogIjUxMng1MTIiLAogICAgInR5cGUiOiAiaW1hZ2UvcG5nIgogIH1dCn0=">
+    <!-- Standard PWA Manifest (Data URL) -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIjEtTWludXRlIENoaW5lc2UgU3BlZWNoIFRyYWluZXIiLAogICJzaG9ydF9uYW1lIjogIjFNaW5TcGVlY2giLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzRmNDZlNSIsCiAgInRoZW1lX2NvbG9yIjogIiM0ZjQ2ZTUiLAogICpvaWNvbnMiOiBbewogICAgInNyYyI6ICJodHRwczovL2Nkbi1pY29ucy1wbmcuZmxhdGljb24uY29tLzUxMi8vNTk2OC81OTY4MjA0LnBuZyIsCiAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAidHlwZSI6ICJpbWZ3ZS9wbmciCiAgfV0KfQ==">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -32,7 +32,6 @@
             transform-origin: 50% 50%;
         }
 
-        /* Prevent overscroll on iOS and handle safe areas */
         body {
             position: fixed;
             width: 100%;
@@ -78,7 +77,7 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                         </svg>
                     </button>
-                    <button id="stopBtn" class="bg-red-500 hover:bg-red-600 text-white w-20 h-20 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 hidden animate-pulse">
+                    <button id="stopBtn" class="bg-red-500 hover:bg-red-600 text-white w-20 h-20 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-90 hidden">
                         <div class="w-6 h-6 bg-white rounded-sm"></div>
                     </button>
                 </div>
@@ -117,7 +116,6 @@
     </div>
 
     <script>
-        // --- App Logic ---
         const apiKey = ""; 
         const modelId = "gemini-2.5-flash-preview-09-2025";
         const SPEECH_LIMIT = 60; 
@@ -128,6 +126,7 @@
         let audioPlayer = new Audio();
         let timerCountdown;
         let timeLeft = SPEECH_LIMIT;
+        let currentMimeType = '';
 
         const recordBtn = document.getElementById('recordBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -149,7 +148,6 @@
             const m = String(Math.floor(seconds / 60)).padStart(2, '0');
             const s = String(seconds % 60).padStart(2, '0');
             timerDisplay.textContent = `${m}:${s}`;
-            
             const offset = totalCircumference - (seconds / SPEECH_LIMIT) * totalCircumference;
             timerRing.style.strokeDashoffset = offset;
         }
@@ -158,21 +156,33 @@
             errorArea.classList.add('hidden');
             resultContainer.classList.add('hidden');
             actionsContainer.classList.add('hidden');
+            audioChunks = [];
             
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+                
+                // Better MimeType support detection for iOS
+                const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/wav'];
+                currentMimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
 
-                mediaRecorder = new MediaRecorder(stream, { mimeType });
-                audioChunks = [];
+                mediaRecorder = new MediaRecorder(stream, { mimeType: currentMimeType });
 
-                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
 
                 mediaRecorder.onstop = () => {
-                    audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-                    audioPlayer.src = URL.createObjectURL(audioBlob);
+                    // Create Blob only after recording truly stops
+                    audioBlob = new Blob(audioChunks, { type: currentMimeType || 'audio/mp4' });
+                    const audioURL = URL.createObjectURL(audioBlob);
+                    audioPlayer.src = audioURL;
+                    
+                    // UI Reset
                     actionsContainer.classList.remove('hidden');
                     statusLabel.textContent = "演讲结束 (Done)";
+                    recordBtn.classList.remove('hidden');
+                    stopBtn.classList.add('hidden');
+                    statusLabel.classList.remove('text-indigo-600');
                 };
 
                 mediaRecorder.start();
@@ -192,24 +202,26 @@
                 }, 1000);
                 
             } catch (err) {
-                errorArea.textContent = "無法起動麦克風。請確認権限。";
+                errorArea.textContent = "無法起動麦克風。請確認権限。 Error: " + err.message;
                 errorArea.classList.remove('hidden');
             }
         }
 
         function stopSpeech() {
-            if (mediaRecorder?.state === 'recording') {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
                 mediaRecorder.stream.getTracks().forEach(t => t.stop());
                 clearInterval(timerCountdown);
-                recordBtn.classList.remove('hidden');
-                stopBtn.classList.add('hidden');
-                statusLabel.classList.remove('text-indigo-600');
             }
         }
 
         async function transcribe() {
-            if (!audioBlob) return;
+            if (!audioBlob || audioBlob.size === 0) {
+                errorArea.textContent = "無効な録音データです。";
+                errorArea.classList.remove('hidden');
+                return;
+            }
+
             loadingSpinner.classList.remove('hidden');
             transcribeBtn.disabled = true;
             errorArea.classList.add('hidden');
@@ -218,13 +230,20 @@
             reader.readAsDataURL(audioBlob);
             reader.onloadend = async () => {
                 const base64 = reader.result.split(',')[1];
-                const mime = audioBlob.type || 'audio/mp4';
+                
+                // Normalize mimeType for Gemini API
+                let apiMimeType = audioBlob.type.split(';')[0];
+                if (apiMimeType === 'audio/x-m4a' || apiMimeType === 'audio/mp4') {
+                    apiMimeType = 'audio/mp4';
+                } else if (!apiMimeType.includes('audio/')) {
+                    apiMimeType = 'audio/mp4'; // Fallback
+                }
 
                 const payload = {
                     contents: [{
                         parts: [
                             { text: "请将这段中文演讲准确转换为文字。如果是空音请提示。只需要返回文字内容。" },
-                            { inlineData: { mimeType: mime, data: base64 } }
+                            { inlineData: { mimeType: apiMimeType, data: base64 } }
                         ]
                     }]
                 };
@@ -237,7 +256,10 @@
                         body: JSON.stringify(payload)
                     });
 
-                    if (!response.ok) throw new Error("API通信失敗");
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.error?.message || "API通信失敗");
+                    }
 
                     const result = await response.json();
                     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -264,7 +286,10 @@
         
         playBtn.onclick = () => {
             if (audioPlayer.paused) {
-                audioPlayer.play();
+                audioPlayer.play().catch(e => {
+                    errorArea.textContent = "再生エラー: " + e.message;
+                    errorArea.classList.remove('hidden');
+                });
                 document.getElementById('playIcon').innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
             } else {
                 audioPlayer.pause();
@@ -273,7 +298,9 @@
         };
 
         audioPlayer.ontimeupdate = () => {
-            progressBar.style.width = `${(audioPlayer.currentTime / audioPlayer.duration) * 100}%`;
+            if (audioPlayer.duration) {
+                progressBar.style.width = `${(audioPlayer.currentTime / audioPlayer.duration) * 100}%`;
+            }
         };
 
         audioPlayer.onended = () => {
@@ -284,19 +311,28 @@
         transcribeBtn.onclick = transcribe;
 
         document.getElementById('copyBtn').onclick = () => {
-            const el = document.createElement('textarea');
-            el.value = transcriptionText.textContent;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            alert("已複製文本");
+            const text = transcriptionText.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("已複製文本");
+            }).catch(() => {
+                const el = document.createElement('textarea');
+                el.value = text;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                alert("已複製文本");
+            });
         };
 
         // iOS Audio context unlock
         window.addEventListener('touchstart', () => {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
             if (ctx.state === 'suspended') ctx.resume();
+            audioPlayer.play().then(() => {
+                audioPlayer.pause();
+                audioPlayer.currentTime = 0;
+            }).catch(() => {});
         }, { once: true });
     </script>
 </body>
